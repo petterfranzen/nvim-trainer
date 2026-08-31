@@ -1,0 +1,18 @@
+{
+  "name": "nvim-trainer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VIM QUEST - an ASCII platformer that teaches real Vim motions.",
+  "author": "Petter Franzen <petter.franzen@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  }
+}
