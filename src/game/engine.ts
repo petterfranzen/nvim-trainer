@@ -1,18 +1,44 @@
-import type { LevelDef, LevelState, Point, Tile } from './types.ts';
+import type { AbilityId, LevelDef, LevelState, Point, Tile } from './types.ts';
 
-/** Tiles that block step motions (h/j/k/l) but that jumps may land on. */
-function isWall(tile: Tile): boolean {
-  return tile === '#' || tile === 'D';
+/**
+ * Tiles that block step motions (h/j/k/l) but that jumps may land on.
+ * 'P' (phase wall) is a hard wall like '#' until the Phase ability is
+ * granted, at which point it drops out of every one of these checks
+ * entirely (see isPhaseable below) - phasing doesn't just help jumps, it
+ * makes the tile fully transparent to every motion, h/j/k/l included.
+ */
+function isWall(tile: Tile, abilities: ReadonlySet<AbilityId>): boolean {
+  if (tile === 'P' && abilities.has('phase')) return false;
+  return tile === '#' || tile === 'D' || tile === 'P';
 }
 
-/** Tiles a *jump* (0 $ gg G) may pass through / land on. Pits only yield to word motions. */
-function isJumpPassable(tile: Tile): boolean {
-  return tile !== '#' && tile !== 'D' && tile !== '~';
+/**
+ * Tiles a *jump* (0 $ gg G w b e) may pass through / land on. Pits only
+ * yield to jumps unconditionally; 'C' (chasm) is a harder version of a
+ * pit that only yields once Far Jump is granted - before that it's a
+ * hard wall to jumps too, same as '#'.
+ */
+function isJumpPassable(tile: Tile, abilities: ReadonlySet<AbilityId>): boolean {
+  if (isWall(tile, abilities)) return false;
+  if (tile === '~') return true;
+  if (tile === 'C') return abilities.has('farjump');
+  return true;
 }
 
-/** Tiles that count as part of a "word" for w/b/e. */
-function isWordTile(tile: Tile): boolean {
-  return tile !== '#' && tile !== '~' && tile !== 'D';
+/**
+ * Tiles that count as part of a "word" for w/b/e's own word-boundary
+ * scan - distinct from jump-passability. A pit/chasm is always treated
+ * as a separator, never fillable "word" content, regardless of whether
+ * Far Jump makes it currently crossable - the same way '~' already
+ * wasn't a word tile even though jumps could always cross it. A phase
+ * wall is the opposite: before Phase it's exactly as solid as '#'
+ * (never a word tile); after, it's indistinguishable from normal floor.
+ */
+function isWordTile(tile: Tile, abilities: ReadonlySet<AbilityId>): boolean {
+  if (tile === '~' || tile === 'C') return false;
+  if (tile === '#' || tile === 'D') return false;
+  if (tile === 'P') return abilities.has('phase');
+  return true;
 }
 
 export type ActionResult =
@@ -22,6 +48,7 @@ export type ActionResult =
   | { kind: 'picked-up' }
   | { kind: 'placed' }
   | { kind: 'cleared' }
+  | { kind: 'secret-found' }
   | { kind: 'noop' }
   | { kind: 'won' };
 
@@ -57,9 +84,11 @@ export class Engine {
   state: LevelState;
   private goal: Point;
   private def: LevelDef;
+  private abilities: ReadonlySet<AbilityId>;
 
-  constructor(def: LevelDef) {
+  constructor(def: LevelDef, abilities: ReadonlySet<AbilityId> = new Set()) {
     this.def = def;
+    this.abilities = abilities;
     const { grid, start } = parseLevel(def);
     this.goal = findGoal(grid);
     this.state = {
@@ -98,22 +127,39 @@ export class Engine {
     return onGoal && t !== 'O';
   }
 
-  /** Single-tile step: h/j/k/l. */
-  step(dx: number, dy: number): ActionResult {
-    const next: Point = { x: this.state.player.x + dx, y: this.state.player.y + dy };
-    if (!this.inBounds(next) || isWall(this.tileAt(next))) return { kind: 'blocked' };
-    if (this.tileAt(next) === '~') return { kind: 'blocked' };
-    if (this.tileAt(next) === 'X') {
-      this.reset();
-      return { kind: 'zapped' };
-    }
-    this.state.player = next;
+  /**
+   * A secret ('!') is consumed the moment you land on it, from any
+   * motion - not just steps. Never blocks or competes with a win on the
+   * same move (the two tiles are always distinct), so this only ever
+   * matters when checkWin() didn't already fire.
+   */
+  private consumeSecret(p: Point): boolean {
+    if (this.tileAt(p) !== '!') return false;
+    this.state.grid[p.y][p.x] = '.';
+    return true;
+  }
+
+  private arrive(): ActionResult {
     this.state.moves++;
     if (this.checkWin()) {
       this.state.won = true;
       return { kind: 'won' };
     }
+    if (this.consumeSecret(this.state.player)) return { kind: 'secret-found' };
     return { kind: 'moved' };
+  }
+
+  /** Single-tile step: h/j/k/l. */
+  step(dx: number, dy: number): ActionResult {
+    const next: Point = { x: this.state.player.x + dx, y: this.state.player.y + dy };
+    if (!this.inBounds(next) || isWall(this.tileAt(next), this.abilities)) return { kind: 'blocked' };
+    if (this.tileAt(next) === '~' || this.tileAt(next) === 'C') return { kind: 'blocked' };
+    if (this.tileAt(next) === 'X') {
+      this.reset();
+      return { kind: 'zapped' };
+    }
+    this.state.player = next;
+    return this.arrive();
   }
 
   /** Casts a jump in direction (dx,dy), stopping just before a wall/closed-door/pit or the edge. */
@@ -121,7 +167,7 @@ export class Engine {
     let cur = { ...this.state.player };
     for (;;) {
       const next = { x: cur.x + dx, y: cur.y + dy };
-      if (!this.inBounds(next) || !isJumpPassable(this.tileAt(next))) break;
+      if (!this.inBounds(next) || !isJumpPassable(this.tileAt(next), this.abilities)) break;
       cur = next;
     }
     return cur;
@@ -130,12 +176,7 @@ export class Engine {
   private landJump(dest: Point): ActionResult {
     if (dest.x === this.state.player.x && dest.y === this.state.player.y) return { kind: 'blocked' };
     this.state.player = dest;
-    this.state.moves++;
-    if (this.checkWin()) {
-      this.state.won = true;
-      return { kind: 'won' };
-    }
-    return { kind: 'moved' };
+    return this.arrive();
   }
 
   lineStart(): ActionResult {
@@ -162,12 +203,12 @@ export class Engine {
     const row = this.row();
     const last = row.length - 1;
     let pos = this.state.player.x;
-    if (isWordTile(row[pos])) {
-      while (pos <= last && isWordTile(row[pos])) pos++;
+    if (isWordTile(row[pos], this.abilities)) {
+      while (pos <= last && isWordTile(row[pos], this.abilities)) pos++;
     } else {
       pos++;
     }
-    while (pos <= last && !isWordTile(row[pos])) pos++;
+    while (pos <= last && !isWordTile(row[pos], this.abilities)) pos++;
     if (pos > last) return { kind: 'blocked' };
     return this.landJump({ x: pos, y: this.state.player.y });
   }
@@ -176,18 +217,18 @@ export class Engine {
     const row = this.row();
     const last = row.length - 1;
     let pos = this.state.player.x + 1;
-    while (pos <= last && !isWordTile(row[pos])) pos++;
+    while (pos <= last && !isWordTile(row[pos], this.abilities)) pos++;
     if (pos > last) return { kind: 'blocked' };
-    while (pos + 1 <= last && isWordTile(row[pos + 1])) pos++;
+    while (pos + 1 <= last && isWordTile(row[pos + 1], this.abilities)) pos++;
     return this.landJump({ x: pos, y: this.state.player.y });
   }
 
   wordBack(): ActionResult {
     const row = this.row();
     let pos = this.state.player.x - 1;
-    while (pos >= 0 && !isWordTile(row[pos])) pos--;
+    while (pos >= 0 && !isWordTile(row[pos], this.abilities)) pos--;
     if (pos < 0) return { kind: 'blocked' };
-    while (pos - 1 >= 0 && isWordTile(row[pos - 1])) pos--;
+    while (pos - 1 >= 0 && isWordTile(row[pos - 1], this.abilities)) pos--;
     return this.landJump({ x: pos, y: this.state.player.y });
   }
 
@@ -214,6 +255,20 @@ export class Engine {
       return { kind: 'picked-up' };
     }
     return { kind: 'noop' };
+  }
+
+  /**
+   * <space>ff: warps straight to an arbitrary point, bypassing every
+   * other action's wall/hazard/pit/door checks entirely - unlike every
+   * other motion here, a fuzzy-finder jump isn't a *path* through the
+   * level, it's picking a destination by name and landing there. That's
+   * the actual thing this command is teaching: it's a categorically
+   * bigger jump than 0/$/gg/G, not just a longer-range version of them.
+   */
+  warp(dest: Point): ActionResult {
+    if (!this.inBounds(dest)) return { kind: 'blocked' };
+    this.state.player = { ...dest };
+    return this.arrive();
   }
 
   /** p: places a held item into an adjacent door, opening it. */

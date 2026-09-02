@@ -9,6 +9,9 @@
   --wall: #3a3f46;
   --pit: #b45309;
   --door: #5aa9e6;
+  --file: #b28dff;
+  --chasm: #5a4a7a;
+  --secret: #ff6ec7;
   --border: #2a2f36;
   font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
 }
@@ -89,6 +92,33 @@ body {
   border: 1px solid var(--border);
 }
 
+.level-select {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem;
+  width: min(640px, 90vw);
+  margin: 0 auto 1rem;
+}
+
+.level-btn {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.8rem;
+  text-align: left;
+  background: var(--bg-panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.level-btn:hover {
+  border-color: var(--accent);
+  filter: none;
+}
+
+.level-btn.done {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .title-progress {
   color: var(--dim);
   font-size: 0.9rem;
@@ -151,6 +181,11 @@ body {
   border-radius: 3px;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.badge-ability {
+  background: var(--file);
+  color: #1c1230;
 }
 
 .buffer {
@@ -257,6 +292,38 @@ body {
   font-weight: 700;
 }
 
+.cell.file {
+  background: #211a33;
+  color: var(--file);
+  font-weight: 700;
+}
+
+/* A chasm reads as "worse than a pit" (near-black void) until Far Jump
+   makes it just as crossable as one - the tile itself never changes
+   appearance based on the ability, only its behavior, so the level's
+   own visual telegraphs "this is the harder obstacle" honestly. */
+.cell.chasm {
+  background: #05060a;
+  color: var(--chasm);
+}
+
+/* Dashed border (vs. .wall's solid one) hints "not quite as solid as it
+   looks" without giving away that it's a wall you'll eventually walk
+   through - same idea as the chasm above, appearance doesn't change
+   once Phase is actually granted, only behavior does. */
+.cell.phasewall {
+  background: rgba(58, 63, 70, 0.4);
+  color: #7d828a;
+  border: 1px dashed #7d828a;
+}
+
+.cell.secret {
+  background: #2b1424;
+  color: var(--secret);
+  font-weight: 700;
+  animation: blink 1.4s step-end infinite;
+}
+
 .cell.player {
   background: var(--accent);
   color: #08110d;
@@ -303,6 +370,98 @@ body {
 .overlay-hint {
   color: var(--dim);
   font-size: 0.85rem;
+}
+
+/* ---------- Finder (<space>ff) ---------- */
+
+.finder {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 4, 5, 0.85);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.finder.hidden {
+  display: none;
+}
+
+.finder-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--file);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  width: min(420px, 90vw);
+}
+
+.finder-title {
+  color: var(--file);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+
+.finder-query {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  color: var(--fg);
+  margin-bottom: 0.6rem;
+}
+
+.finder-cursor {
+  color: var(--file);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.finder-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 0.6rem;
+}
+
+.finder-item {
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  color: var(--dim);
+}
+
+.finder-item-icon {
+  display: inline-block;
+  width: 1.4em;
+  text-align: center;
+  margin-right: 0.3em;
+}
+
+.finder-item.selected {
+  background: #2b2247;
+  color: var(--file);
+  font-weight: 700;
+}
+
+.finder-empty {
+  padding: 0.3rem 0.5rem;
+  color: var(--dim);
+  font-style: italic;
+}
+
+.finder-hint {
+  color: var(--dim);
+  font-size: 0.75rem;
 }
 
 footer.hint-footer {

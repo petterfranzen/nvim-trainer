@@ -5,7 +5,6 @@ export interface ParsedCommand {
   count: number;
 }
 
-const CHORD_KEYS: Record<string, CommandId> = { g: 'gg', d: 'dd', y: 'yy' };
 const SIMPLE_KEYS: Record<string, CommandId> = {
   h: 'h', j: 'j', k: 'k', l: 'l',
   w: 'w', b: 'b', e: 'e',
@@ -14,13 +13,27 @@ const SIMPLE_KEYS: Record<string, CommandId> = {
   p: 'p',
 };
 
+// Multi-key sequences, keyed by their full key string in order. Doubled
+// chords (gg/dd/yy) are just this table's 2-key case; <space>ff is a 3-key
+// one - one mechanism covers both instead of a separate doubled-letter
+// special case plus a separate leader-key special case.
+const SEQUENCES: Record<string, CommandId> = {
+  gg: 'gg',
+  dd: 'dd',
+  yy: 'yy',
+  ' ff': 'ff',
+};
+const MAX_SEQUENCE_LEN = Math.max(...Object.keys(SEQUENCES).map((s) => s.length));
+
 /**
- * Turns a stream of raw keydown characters into Vim-style commands:
- * digit counts (e.g. "3j"), and doubled-letter chords (gg / dd / yy).
- * A different key breaks a pending chord, just like real Vim.
+ * Turns a stream of raw keydown characters into Vim-style commands: digit
+ * counts (e.g. "3j"), and multi-key sequences (doubled chords gg/dd/yy,
+ * and the leader sequence <space>ff). A key that can't continue any
+ * sequence prefix breaks the pending buffer, just like real Vim breaking
+ * a chord on an unexpected key.
  */
 export class InputBuffer {
-  private pendingChord: string | null = null;
+  private pendingSequence = '';
   private pendingCount = '';
 
   /** Returns a completed command, or null while still buffering input. */
@@ -35,18 +48,33 @@ export class InputBuffer {
       return null;
     }
 
-    if (this.pendingChord) {
-      const chord = this.pendingChord;
-      this.pendingChord = null;
-      if (key === chord) {
+    if (this.pendingSequence) {
+      const attempt = this.pendingSequence + key;
+      if (attempt in SEQUENCES) {
+        this.pendingSequence = '';
         const count = this.consumeCount();
-        return { id: CHORD_KEYS[chord], count };
+        return { id: SEQUENCES[attempt], count };
       }
-      // Any other key cancels the chord; fall through and process this key fresh.
+      if (this.hasPrefixMatch(attempt)) {
+        this.pendingSequence = attempt;
+        return null;
+      }
+      // No sequence still matches; drop the stale buffer and process this
+      // key fresh (it may itself start a new sequence, just like a fresh
+      // key breaking a chord in real Vim doesn't get swallowed).
+      this.pendingSequence = '';
     }
 
-    if (key in CHORD_KEYS) {
-      this.pendingChord = key;
+    if (key in SEQUENCES) {
+      // Single-char keys that are also a complete sequence on their own
+      // don't occur in SEQUENCES today (every entry is 2+ chars), so this
+      // branch is unreachable in practice - kept for safety if that changes.
+      this.pendingSequence = '';
+      const count = this.consumeCount();
+      return { id: SEQUENCES[key], count };
+    }
+    if (this.hasPrefixMatch(key)) {
+      this.pendingSequence = key;
       return null;
     }
 
@@ -65,6 +93,11 @@ export class InputBuffer {
     return null;
   }
 
+  private hasPrefixMatch(prefix: string): boolean {
+    if (prefix.length >= MAX_SEQUENCE_LEN) return false;
+    return Object.keys(SEQUENCES).some((s) => s.startsWith(prefix));
+  }
+
   private consumeCount(): number {
     const n = this.pendingCount === '' ? 1 : parseInt(this.pendingCount, 10);
     this.pendingCount = '';
@@ -72,6 +105,6 @@ export class InputBuffer {
   }
 
   get displayBuffer(): string {
-    return (this.pendingCount || '') + (this.pendingChord || '');
+    return (this.pendingCount || '') + this.pendingSequence.replace(/ /g, '<space>');
   }
 }

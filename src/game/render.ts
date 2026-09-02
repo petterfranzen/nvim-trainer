@@ -9,10 +9,19 @@ const TILE_CLASS: Record<Tile, string> = {
   O: 'rubble',
   K: 'key',
   D: 'door',
+  F: 'file',
+  C: 'chasm',
+  P: 'phasewall',
+  '!': 'secret',
   '@': 'floor',
 };
 
-export function renderGrid(container: HTMLElement, state: LevelState) {
+/**
+ * `fileIcons` maps "x,y" -> that position's file icon (see LevelDef.files)
+ * - only 'F' tiles ever look it up, so every other tile ignores it
+ * entirely. Optional: levels with no files array just render a plain 'F'.
+ */
+export function renderGrid(container: HTMLElement, state: LevelState, fileIcons?: Map<string, string>) {
   const { grid, player } = state;
   const cols = grid[0]?.length ?? 0;
   container.style.setProperty('--cols', String(cols));
@@ -24,7 +33,8 @@ export function renderGrid(container: HTMLElement, state: LevelState) {
       const isPlayer = x === player.x && y === player.y;
       const tile = grid[y][x];
       const cls = TILE_CLASS[tile] ?? 'floor';
-      const char = isPlayer ? '@' : tile === '.' ? '' : tile;
+      const icon = tile === 'F' ? fileIcons?.get(`${x},${y}`) : undefined;
+      const char = isPlayer ? '@' : icon ?? (tile === '.' ? '' : tile);
       html += `<div class="cell ${cls}${isPlayer ? ' player' : ''}">${char}</div>`;
     }
   }
