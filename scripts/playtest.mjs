@@ -6,7 +6,7 @@
 // `node scripts/playtest.mjs` (optionally BASE_URL=http://localhost:PORT).
 import { chromium } from 'playwright';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:5183/';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173/';
 
 function assert(cond, msg) {
   if (!cond) throw new Error('ASSERTION FAILED: ' + msg);
@@ -45,7 +45,26 @@ async function main() {
     { title: 'Clear the Rubble', keys: ['8', 'l', '2', 'j', '8', 'h', '2', 'j', '8', 'l', '2', 'j', 'd', 'd'] },
     { title: 'Fetch and Place', keys: ['l', 'l', 'l', 'y', 'y', 'l', 'l', 'l', 'l', 'l', 'p', 'j', 'j'] },
     { title: 'Combined Trial', keys: ['w', 'w', 'e', 'j', 'j', '0', 'j', 'j', '8', 'l', 'd', 'd'] },
-    { title: 'Final Gauntlet', keys: ['G', 'h', 'h', 'y', 'y', 'l', 'l', 'p', 'j', 'j'] },
+    { title: 'The Gauntlet', keys: ['G', 'h', 'h', 'y', 'y', 'l', 'l', 'p', 'j', 'j'] },
+    // <space>ff, then "in" - already an unambiguous fuzzy match for
+    // "index.ts" among the level's decoy files (utils.ts/router.ts have
+    // no 'n' at all; config.ts's only 'n' comes before its only 'i') -
+    // then Enter to warp straight onto the sealed vault's goal.
+    { title: 'Find Files', keys: [' ', 'f', 'f', 'i', 'n', 'Enter'] },
+    // Levels 10-17: no new keybindings, just chasms ('C', needs Far
+    // Jump) and phase walls ('P', needs Phase) alongside everything
+    // already known. See levels.ts's own header comment on this batch
+    // for the shared corridor shape every one of these follows.
+    { title: 'Deeper In', keys: ['j', '$', 'j', 'j', '0', 'j', 'j', 'l', 'l', 'l', 'y', 'y', 'l', 'l', 'l', 'l', 'l', 'p', 'l', 'l', 'l', 'l', 'j', 'j'] },
+    { title: 'Far Jump', keys: ['j', '$', 'j', 'j', '0', 'j', 'j', '$', 'j', 'j', 'h', 'h', 'h', 'h', 'y', 'y', 'h', 'h', 'h', 'h', 'h', 'p', 'h', 'h', 'h', 'h', 'h', 'j', 'j'] },
+    { title: 'The Chasm', keys: ['j', '$', 'j', 'j', '0', 'j', 'j', '$', 'j', 'j'] },
+    // The whole point of this level is that ff needs no walking at all -
+    // straight from the start tile to the vault.
+    { title: 'Cross-Reference', keys: [' ', 'f', 'f', 'v', 'Enter'] },
+    { title: 'Phase', keys: ['j', '$', 'j', 'j', 'h', 'h', 'h', 'y', 'y', 'h', 'h', 'h', 'h', 'h', 'p', 'h', 'h', 'h', 'h', 'h', 'h', 'j', 'j', '$', 'j', 'j'] },
+    { title: 'Through the Wall', keys: ['l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'j', 'j', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'j', 'j', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'j', 'j'] },
+    { title: 'Compound Interest', keys: ['j', '$', 'j', 'j', '0', 'j', 'j', '$', 'j', 'j', 'h', 'h', 'h', 'y', 'y', 'h', 'h', 'h', 'h', 'h', 'p', 'h', 'h', 'h', 'h', 'h', 'h', 'j', 'j', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l'] },
+    { title: 'The Grid', keys: ['j', '$', 'j', 'j', '0', 'j', 'j', '$', 'j', 'j', 'h', 'h', 'h', 'h', 'y', 'y', 'h', 'h', 'h', 'h', 'h', 'h', 'h', 'p', 'h', 'h', 'h', 'h', 'h', 'j', 'j', ' ', 'f', 'f', 'x', 'Enter'] },
   ];
 
   for (let i = 0; i < levelSequences.length; i++) {
@@ -82,7 +101,7 @@ async function main() {
   console.log('== Back at title screen after finishing ==');
   await assert(await page.locator('h1:has-text("VIM QUEST")').isVisible(), 'returned to title screen');
   const progressText = await page.locator('.title-progress').textContent();
-  assert(progressText.includes('8/8'), `localStorage progress shows 8/8 complete (got "${progressText}")`);
+  assert(progressText.includes('17/17'), `localStorage progress shows 17/17 complete (got "${progressText}")`);
 
   if (consoleErrors.length) {
     console.log('Console errors observed:', consoleErrors);

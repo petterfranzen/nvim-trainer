@@ -4,7 +4,9 @@ An ASCII, browser-based platformer that teaches real Vim motions. You move
 and act on an `@` character across text-mode levels using actual Vim
 keybindings - not arrow keys, not WASD-with-vim-labels. Each level unlocks
 one new command family, gives you a one-line in-level hint, and then
-requires you to use that command to solve the level.
+requires you to use that command to solve the level. Deeper in, two
+permanent upgrades change what those same commands can *do* rather than
+adding new ones to learn - see "Permanent upgrades and backtracking" below.
 
 ## Why this exists
 
@@ -40,8 +42,8 @@ Other scripts:
 ```bash
 npm run build          # production build to dist/
 npm run preview        # preview the production build
-npm run playtest       # headless Playwright run through all 8 levels
-npm run playtest:edge  # headless check of locked-command feedback & save/continue
+npm run playtest       # headless Playwright run through all 17 levels
+npm run playtest:edge  # headless check of locked-command feedback, save/continue, the finder, and backtracking
 ```
 
 The playtest scripts need a dev server already running (`npm run dev`) and
@@ -59,6 +61,9 @@ smoke test.
   far and what it does.
 - Progress (which levels you've completed) is saved to your browser's
   `localStorage`, so closing the tab is safe.
+- The title screen lists every level you've unlocked, not just the
+  furthest one - pick any of them to replay it, which is how backtracking
+  for a permanent upgrade's secrets actually works (see below).
 
 ### Command reference
 
@@ -75,6 +80,7 @@ smoke test.
 | `dd` | Clear rubble (`O`) on the tile you're standing on. |
 | `yy` | Pick up a key item (`K`) on the tile you're standing on. |
 | `p` | Place a held key into an adjacent door (`D`), opening it. |
+| `<space>ff` | Open the file finder. Type to fuzzy-filter, `Enter` to warp straight to the top match, `Esc` to cancel. |
 | `1`-`9` before a motion | Repeats that motion N times, e.g. `3l` moves right 3 tiles, `2j` moves down 2. (Stretch goal - implemented for `h j k l w b e`.) |
 
 ### The core mechanic: hazards vs. jumps
@@ -94,10 +100,50 @@ but `w`/`b`/`e` hop clean over them because word boundaries are computed
 independently of what physically sits between two words - just like Vim
 skips over punctuation/whitespace when word-jumping.
 
+`<space>ff` is a different kind of motion from all of the above: every
+other command is a *local* jump, scoped to the current row, column, or
+word. The finder is an absolute jump to a named destination anywhere in
+the level, bypassing walls, hazards, and pits entirely - modeling how a
+fuzzy file-finder (Telescope, fzf) skips the "navigate there" step of
+using a file, rather than being a longer-range version of the other jumps.
+That also means it's never gated by anything else in a level - see level
+13 below, which exists specifically to make that plain.
+
+Levels that use the finder scatter a few decoy files around as visible,
+walkable tiles, each with its own icon - the same icon then shows up next
+to its name in the finder's own list, the way a real fuzzy-finder shows
+file-type icons next to results. Walking past a decoy tells you what its
+icon means; the actual goal is always sealed away where you can't walk to
+it, so the one icon in the list you never saw out in the world is the one
+worth typing toward.
+
+### Permanent upgrades and backtracking
+
+From level 11 onward, two permanent upgrades change what your *existing*
+commands can do, metroidvania-style - neither adds a new key to learn:
+
+- **Far Jump** lets every jump motion (`0` `$` `gg` `G` `w` `b` `e`) cross
+  a chasm (`C`) the same way it's always crossed a pit - `h`/`j`/`k`/`l`
+  still can't. Before the ability, a chasm is a hard wall to everything.
+- **Phase** lets `h`/`j`/`k`/`l` themselves pass straight through a phase
+  wall (`P`) - the one upgrade that changes *walking*, not just jumping.
+  Before Phase, a phase wall is exactly as solid as a real one.
+
+Both persist for the rest of the game once granted, including when you go
+back to an earlier level - completed levels aren't locked behind you.
+Picking **any** previously-reached level from the title screen (not just
+"Continue") reopens it with every command and ability you've earned since,
+not just whatever that level originally taught. Level 10, "Deeper In," has
+two side chambers sealed by a chasm and a phase wall that are genuinely
+impossible to reach the first time through - nothing points you back to it
+explicitly beyond the level's own hint remembering itself out loud, the
+same way a real metroidvania trusts you to remember a locked door.
+
 ## Levels
 
-8 levels, each teaching one command family and then (from level 7) mixing
-previously-learned commands together:
+17 levels. The first 9 teach one command family at a time (mixing
+previously-learned commands together from level 7 on); levels 10-17 layer
+in the two permanent upgrades above at bigger scale:
 
 1. **First Steps** - `h j k l`. A snaking corridor; pure basic movement.
 2. **Line Endings** - `0 $`. A hazard-laced row; `0`/`$` jump clear over
@@ -111,8 +157,35 @@ previously-learned commands together:
 6. **Fetch and Place** - `yy p`. Pick up a key, walk it to a door, place it
    to open the way through.
 7. **Combined Trial** - review: word hops, a hazard row, then rubble.
-8. **Final Gauntlet** - review: a hazard shaft, then a key-and-door puzzle,
-   plus a tip about count-prefixes (`3l`, `2j`, ...) as a closing bonus.
+8. **The Gauntlet** - review: a hazard shaft, then a key-and-door puzzle.
+9. **Find Files** - `<space>ff`. The goal sits in a vault sealed on every
+   side, with no door - the only way in is warping to it by name. A few
+   similarly-named decoy files are scattered around, so typing just enough
+   of the real name to disambiguate is the actual puzzle.
+10. **Deeper In** - no new commands, just a bigger lap of everything so
+    far, plus two dormant, sealed side-shafts that don't look crossable
+    yet. They aren't - not until levels 11 and 14. Remember this one.
+11. **Far Jump** - grants the ability. A normal-skills level; nothing here
+    needs a chasm crossed, since the level that grants an upgrade can't
+    also require it.
+12. **The Chasm** - requires Far Jump. Wide chasm bands stand in for the
+    pits from level 3, now crossable the same way once you have the
+    ability.
+13. **Cross-Reference** - no obstacles at all, deliberately: `<space>ff`
+    doesn't care what's between you and a file, so it never needed a
+    gauntlet in front of it to prove that. Walk past the two decoys first
+    if you want their icons to mean something, then warp into the vault
+    from wherever you happen to be standing.
+14. **Phase** - grants the ability. Same shape as level 11: play it
+    straight, nothing here requires Phase yet.
+15. **Through the Wall** - requires Phase. Every connecting doorway in
+    this level is a phase wall, not open floor - before the ability, there
+    is no route through at all, not even a jump could help.
+16. **Compound Interest** - both upgrades in the same level, in whatever
+    order you reach them. Neither substitutes for the other.
+17. **The Grid** - the finale: everything at once, bigger, plus the
+    count-prefix tip (`3l`, `2j`, ...) as a closing bonus. A nudge, too,
+    if you still remember level 10's two dormant shafts.
 
 ## Project structure
 
@@ -122,17 +195,18 @@ src/
   main.ts              - title screen, app shell, wiring
   style.css            - all styling (dark, monospace, terminal-ish)
   game/
-    types.ts           - tile vocabulary, level/command types
-    levels.ts           - the 8 level definitions (ASCII grids + hints)
-    engine.ts           - movement/motion/action logic, win detection
-    input.ts            - keystroke -> command parsing (counts, gg/dd/yy chords)
+    types.ts           - tile vocabulary, level/command/ability types
+    levels.ts           - the 17 level definitions (ASCII grids + hints)
+    engine.ts           - movement/motion/action logic, ability-gated passability, win detection
+    input.ts            - keystroke -> command parsing (counts, gg/dd/yy chords, <space>ff)
+    fuzzy.ts             - subsequence fuzzy matching for the file finder
     render.ts           - renders grid state to the DOM
-    commands.ts          - command metadata used by the HUD legend
+    commands.ts          - command/ability metadata used by the HUD legend
     storage.ts           - localStorage progress persistence
-    controller.ts        - glues engine+input+render+storage into a playable level
+    controller.ts        - glues engine+input+render+storage into a playable level, plus the finder overlay
 scripts/
-  playtest.mjs          - headless end-to-end playtest of all 8 levels
-  playtest-edge.mjs      - headless check of locked commands & save/continue
+  playtest.mjs          - headless end-to-end playtest of all 17 levels
+  playtest-edge.mjs      - headless check of locked commands, save/continue, the finder, and backtracking
 ```
 
 ## Design decisions worth a second opinion
@@ -148,15 +222,29 @@ scripts/
   invented framing**, not something from Vim itself - it's what makes the
   jump commands mechanically necessary rather than just "another way to
   move." If you'd rather commands be optional shortcuts (closer to how
-  people actually use Vim - jumps as convenience, not requirement), levels
-  2-4, 7, and 8 would need reworking.
+  people actually use Vim - jumps as convenience, not requirement), most
+  levels from here on (2-4, 7-8, and nearly all of 10-17) would need
+  reworking - the same framing extends to chasms and Far Jump.
 - **No arrow-key fallback and no on-screen buttons.** Intentional, per the
   brief, but it does mean the game is unplayable without a physical
   keyboard - no mobile/touch support.
-- **Command scope stops at the first tier** (`hjkl`, `w/b/e`, `0/$`,
-  `gg/G`, `dd`, `yy/p`, plus a count-prefix bonus). Nothing here covers
-  visual mode, search (`/`), registers, macros, or insert mode. Deliberately
-  out of scope for a v1 MVP; whether to build a "tier 2" is a product call.
+- **Command scope has grown well beyond the original v1 MVP** (`hjkl`,
+  `w/b/e`, `0/$`, `gg/G`, `dd`, `yy/p`, plus a count-prefix bonus) -
+  `<space>ff` (modeling a fuzzy file-finder, not real Vim's own `/`
+  search), and two permanent abilities (Far Jump, Phase) that change what
+  existing motions do rather than adding keys. Still nothing here covers
+  visual mode, real `/` search, registers, macros, or insert mode.
+- **`<space>` as the leader key is a hardcoded convention, not a Vim
+  default.** Real Vim's leader is whatever a user's own config maps it to
+  (comma, backslash, ...) - space is just the common convention in most
+  modern starter configs (LazyVim, kickstart.nvim). Same
+  honest-simplification spirit as the `dd`/`yy`/`p` note above.
+- **The metroidvania backtracking is fairly shallow by design.** Only one
+  level (10) has content gated behind a later ability, with two secrets
+  and no other payoff (no item/collectible tracking, no alternate ending).
+  A deeper version would gate real shortcuts or bonus levels behind
+  specific ability combinations, not just flavor secrets - a reasonable
+  "tier 3" if this direction gets pushed further.
 - **No sound, animation, or particle-effect polish** - level-complete
   feedback is a text overlay. The brief explicitly allows this for v1, but
   it's the first place I'd invest more time if visual/audio polish is
