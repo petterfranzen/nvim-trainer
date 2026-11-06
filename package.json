@@ -11,7 +11,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "playtest": "node scripts/playtest.mjs",
-    "playtest:edge": "node scripts/playtest-edge.mjs"
+    "playtest:edge": "node scripts/playtest-edge.mjs",
+    "invariants": "node scripts/invariants.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",
