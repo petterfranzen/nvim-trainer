@@ -53,11 +53,11 @@ export const LEVELS: LevelDef[] = [
     id: 3,
     title: 'Word Hops',
     unlocks: ['w', 'b', 'e'],
-    hint: 'Pits (~) block h/j/k/l. Press w to jump to the start of the next word, b for the previous word, e for the end of a word - words leap clean over pits.',
+    hint: 'Pits (~) block h/j/k/l - and jump motions stop at a solid wall, so the goal sits out past the pits with more of them beyond it. Press w to jump to the start of the next word, b for the previous word, e for the end of a word - words leap clean over pits.',
     grid: [
-      '###################',
-      '#@..~~...~~...~~.G#',
-      '###################',
+      '############',
+      '#@..~~~G~~.#',
+      '############',
     ],
   },
   {

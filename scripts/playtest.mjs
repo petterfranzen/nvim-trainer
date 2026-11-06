@@ -40,7 +40,9 @@ async function main() {
   const levelSequences = [
     { title: 'First Steps', keys: ['8', 'l', '2', 'j', '8', 'h', '2', 'j', '8', 'l', '2', 'j'] },
     { title: 'Line Endings', keys: ['$', 'j', 'j', '0', 'j', 'j', '$', 'j', 'j', '0'] },
-    { title: 'Word Hops', keys: ['w', 'w', 'w', 'e'] },
+    // Step up to the pit, then hop it with w - the pits sit on both sides of
+    // the goal so a line jump ($) only lands past it, never on it.
+    { title: 'Word Hops', keys: ['l', 'l', 'w'] },
     { title: 'Top and Bottom', keys: ['G', 'l', 'l', 'l', 'l', 'g', 'g'] },
     { title: 'Clear the Rubble', keys: ['8', 'l', '2', 'j', '8', 'h', '2', 'j', '8', 'l', '2', 'j', 'd', 'd'] },
     { title: 'Fetch and Place', keys: ['l', 'l', 'l', 'y', 'y', 'l', 'l', 'l', 'l', 'l', 'p', 'j', 'j'] },

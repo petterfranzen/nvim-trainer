@@ -44,13 +44,22 @@ npm run build          # production build to dist/
 npm run preview        # preview the production build
 npm run playtest       # headless Playwright run through all 17 levels
 npm run playtest:edge  # headless check of locked-command feedback, save/continue, the finder, and backtracking
+npm run invariants     # prove each level's rule: no earlier command can skip it, and the chasm/phase gates hold
 ```
 
 The playtest scripts need a dev server already running (`npm run dev`) and
 Playwright's Chromium (`npx playwright install chromium`, if not already
 present) - they exist as an automated regression check that every level is
 actually solvable with its intended key sequence, not just a manual
-smoke test.
+smoke test. They only walk the *intended* path, though, so a level whose
+new command turns out to be unnecessary - some earlier motion reaching the
+goal on its own - would still pass. `npm run invariants` closes that gap:
+it needs no server and no browser, importing the engine and level
+definitions directly and searching each level's whole state space to prove
+that (a) every level is solvable with the commands unlocked by the time it
+is reached, (b) no level can be completed with only the commands unlocked
+*before* it (its new command is genuinely required), and (c) a chasm or
+phase wall only yields to its own ability.
 
 ## How to play
 
@@ -98,7 +107,10 @@ that don't "pass through" every intervening cell. It's also what makes
 Pits (`~`) are the word-motion equivalent: impassable to `h`/`j`/`k`/`l`,
 but `w`/`b`/`e` hop clean over them because word boundaries are computed
 independently of what physically sits between two words - just like Vim
-skips over punctuation/whitespace when word-jumping.
+skips over punctuation/whitespace when word-jumping. A pit is a *separator*
+a word jump hops; a solid barrier - a wall, a closed door, an un-Far-Jumped
+chasm, an un-Phased phase wall - stops a word jump dead, exactly as it stops
+`0`/`$`/`gg`/`G`.
 
 `<space>ff` is a different kind of motion from all of the above: every
 other command is a *local* jump, scoped to the current row, column, or
@@ -149,7 +161,8 @@ in the two permanent upgrades above at bigger scale:
 2. **Line Endings** - `0 $`. A hazard-laced row; `0`/`$` jump clear over
    the hazards that block a step-by-step walk.
 3. **Word Hops** - `w b e`. Floor "words" separated by pits; only word
-   motions can cross.
+   motions can cross them, and the goal sits just past the pits with more
+   of them behind it, so a line jump (`0`/`$`) only lands beyond it.
 4. **Top and Bottom** - `gg G`. A vertical hazard shaft; `G` drops straight
    to the bottom, `gg` jumps straight to the top of a second shaft.
 5. **Clear the Rubble** - `dd`. The goal is buried under rubble; clearing
@@ -207,6 +220,7 @@ src/
 scripts/
   playtest.mjs          - headless end-to-end playtest of all 17 levels
   playtest-edge.mjs      - headless check of locked commands, save/continue, the finder, and backtracking
+  invariants.mjs         - level-rule proofs: no earlier command skips a level, chasm/phase gates hold
 ```
 
 ## Design decisions worth a second opinion

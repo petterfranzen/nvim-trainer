@@ -41,6 +41,19 @@ function isWordTile(tile: Tile, abilities: ReadonlySet<AbilityId>): boolean {
   return true;
 }
 
+/**
+ * A tile a word motion (w/b/e) may hop *over* on its way to the next word.
+ * A pit qualifies (types.ts: "word motions can leap clean over pits"), but a
+ * barrier a jump cannot cross - a wall, a closed door, a chasm before Far
+ * Jump, a phase wall before Phase - does not. Without this check a word hop
+ * would sail straight through solid walls, letting a level be solved by a
+ * command it never teaches (and contradicting types.ts, which calls every one
+ * of those tiles "impassable to everything" until its ability is granted).
+ */
+function isWordBarrier(tile: Tile, abilities: ReadonlySet<AbilityId>): boolean {
+  return !isJumpPassable(tile, abilities);
+}
+
 export type ActionResult =
   | { kind: 'moved' }
   | { kind: 'blocked' }
@@ -208,7 +221,10 @@ export class Engine {
     } else {
       pos++;
     }
-    while (pos <= last && !isWordTile(row[pos], this.abilities)) pos++;
+    while (pos <= last && !isWordTile(row[pos], this.abilities)) {
+      if (isWordBarrier(row[pos], this.abilities)) return { kind: 'blocked' };
+      pos++;
+    }
     if (pos > last) return { kind: 'blocked' };
     return this.landJump({ x: pos, y: this.state.player.y });
   }
@@ -217,7 +233,10 @@ export class Engine {
     const row = this.row();
     const last = row.length - 1;
     let pos = this.state.player.x + 1;
-    while (pos <= last && !isWordTile(row[pos], this.abilities)) pos++;
+    while (pos <= last && !isWordTile(row[pos], this.abilities)) {
+      if (isWordBarrier(row[pos], this.abilities)) return { kind: 'blocked' };
+      pos++;
+    }
     if (pos > last) return { kind: 'blocked' };
     while (pos + 1 <= last && isWordTile(row[pos + 1], this.abilities)) pos++;
     return this.landJump({ x: pos, y: this.state.player.y });
@@ -226,7 +245,10 @@ export class Engine {
   wordBack(): ActionResult {
     const row = this.row();
     let pos = this.state.player.x - 1;
-    while (pos >= 0 && !isWordTile(row[pos], this.abilities)) pos--;
+    while (pos >= 0 && !isWordTile(row[pos], this.abilities)) {
+      if (isWordBarrier(row[pos], this.abilities)) return { kind: 'blocked' };
+      pos--;
+    }
     if (pos < 0) return { kind: 'blocked' };
     while (pos - 1 >= 0 && isWordTile(row[pos - 1], this.abilities)) pos--;
     return this.landJump({ x: pos, y: this.state.player.y });
