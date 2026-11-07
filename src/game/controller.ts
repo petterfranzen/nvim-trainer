@@ -2,6 +2,7 @@ import { Engine } from './engine.ts';
 import { InputBuffer } from './input.ts';
 import { LEVELS } from './levels.ts';
 import { renderGrid } from './render.ts';
+import { escapeHtml } from './escape.ts';
 import { commandInfo, ALL_COMMANDS, ABILITY_NAMES, ABILITY_SHORT_NAMES } from './commands.ts';
 import { getProgress, markCompleted } from './storage.ts';
 import { fuzzyMatch } from './fuzzy.ts';
@@ -256,13 +257,13 @@ export class GameController {
     const matches = fuzzyMatch(this.fuzzyQuery, files);
     const rows = matches
       .map(
-        (m, i) => `<div class="finder-item${i === this.fuzzySelected ? ' selected' : ''}"><span class="finder-item-icon">${m.icon}</span>${m.name}</div>`,
+        (m, i) => `<div class="finder-item${i === this.fuzzySelected ? ' selected' : ''}"><span class="finder-item-icon">${escapeHtml(m.icon)}</span>${escapeHtml(m.name)}</div>`,
       )
       .join('');
     this.finder.innerHTML = `
       <div class="finder-box">
         <div class="finder-title">Find Files</div>
-        <div class="finder-query">&gt; ${this.fuzzyQuery}<span class="finder-cursor">_</span></div>
+        <div class="finder-query">&gt; ${escapeHtml(this.fuzzyQuery)}<span class="finder-cursor">_</span></div>
         <div class="finder-list">${rows || '<div class="finder-empty">no matches</div>'}</div>
         <div class="finder-hint">Enter to jump &middot; Esc to cancel &middot; &uarr;&darr; to change selection</div>
       </div>
@@ -296,8 +297,8 @@ export class GameController {
           <p class="overlay-hint">Press Enter to return to the title screen.</p>
         </div>`
       : `<div class="overlay-box">
-          <h2>Level Complete: ${level.title}</h2>
-          <p>${unlockLine}</p>
+          <h2>Level Complete: ${escapeHtml(level.title)}</h2>
+          <p>${escapeHtml(unlockLine)}</p>
           <p class="overlay-hint">Press Enter to continue.</p>
         </div>`;
     this.pendingAdvance = isLast ? 'title' : 'next';
@@ -328,23 +329,23 @@ export class GameController {
   private renderHud() {
     const level = LEVELS[this.levelIndex];
     const legend = ALL_COMMANDS.filter((c) => this.unlocked.has(c.id))
-      .map((c) => `<span class="legend-item"><kbd>${c.keys}</kbd><span class="legend-desc">${c.description}</span></span>`)
+      .map((c) => `<span class="legend-item"><kbd>${escapeHtml(c.keys)}</kbd><span class="legend-desc">${escapeHtml(c.description)}</span></span>`)
       .join('');
     const buffer = this.input.displayBuffer;
     const abilityBadges = [...this.unlockedAbilities]
-      .map((a) => `<span class="badge badge-ability">${ABILITY_SHORT_NAMES[a]}</span>`)
+      .map((a) => `<span class="badge badge-ability">${escapeHtml(ABILITY_SHORT_NAMES[a])}</span>`)
       .join('');
     this.hud.innerHTML = `
       <div class="hud-top">
-        <span class="level-name">Level ${this.levelIndex + 1}/${LEVELS.length}: ${level.title}</span>
+        <span class="level-name">Level ${this.levelIndex + 1}/${LEVELS.length}: ${escapeHtml(level.title)}</span>
         <span class="hud-right">
           ${abilityBadges}
           ${this.engine.state.hasItem ? '<span class="badge">holding key</span>' : ''}
           <span class="moves">moves: ${this.engine.state.moves}</span>
-          <span class="buffer">${buffer ? `[${buffer}]` : ''}</span>
+          <span class="buffer">${buffer ? `[${escapeHtml(buffer)}]` : ''}</span>
         </span>
       </div>
-      <div class="hint">${level.hint}</div>
+      <div class="hint">${escapeHtml(level.hint)}</div>
       <div class="legend">${legend}</div>
     `;
   }

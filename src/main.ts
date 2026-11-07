@@ -2,6 +2,7 @@ import './style.css';
 import { GameController, getInitialLevel, TOTAL_LEVELS } from './game/controller.ts';
 import { getProgress, resetProgress } from './game/storage.ts';
 import { LEVELS } from './game/levels.ts';
+import { escapeHtml } from './game/escape.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let controller: GameController | null = null;
@@ -26,7 +27,7 @@ function showTitle() {
     ? Array.from({ length: progress.highestUnlocked + 1 }, (_, i) => {
         const done = progress.completed.includes(i);
         return `<button class="btn level-btn${done ? ' done' : ''}" data-level="${i}">
-          ${done ? '&#10003;' : ''} ${i + 1}. ${LEVELS[i].title}
+          ${done ? '&#10003;' : ''} ${i + 1}. ${escapeHtml(LEVELS[i].title)}
         </button>`;
       }).join('')
     : '';

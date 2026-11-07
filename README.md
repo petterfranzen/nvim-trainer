@@ -44,6 +44,7 @@ npm run build          # production build to dist/
 npm run preview        # preview the production build
 npm run playtest       # headless Playwright run through all 17 levels
 npm run playtest:edge  # headless check of locked-command feedback, save/continue, the finder, and backtracking
+npm test               # vitest unit tests (no browser needed)
 ```
 
 The playtest scripts need a dev server already running (`npm run dev`) and
@@ -51,6 +52,14 @@ Playwright's Chromium (`npx playwright install chromium`, if not already
 present) - they exist as an automated regression check that every level is
 actually solvable with its intended key sequence, not just a manual
 smoke test.
+
+`npm test` runs in Node with no browser: it unit-tests the fuzzy matcher
+(`fuzzy.ts`), the raw-keystroke parser (`input.ts`) and the engine's
+ability-gated tile passability (`engine.ts`), so a parser or scoring
+regression shows up as a named failing test rather than only as a level that
+stopped being solvable. One of the tests is a guard: it fails if any value
+interpolated into an `innerHTML` template is not run through `escapeHtml`
+(`src/game/escape.ts`).
 
 ## How to play
 

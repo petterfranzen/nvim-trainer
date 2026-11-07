@@ -1,4 +1,5 @@
 import type { LevelState, Tile } from './types.ts';
+import { escapeHtml } from './escape.ts';
 
 const TILE_CLASS: Record<Tile, string> = {
   '#': 'wall',
@@ -35,7 +36,7 @@ export function renderGrid(container: HTMLElement, state: LevelState, fileIcons?
       const cls = TILE_CLASS[tile] ?? 'floor';
       const icon = tile === 'F' ? fileIcons?.get(`${x},${y}`) : undefined;
       const char = isPlayer ? '@' : icon ?? (tile === '.' ? '' : tile);
-      html += `<div class="cell ${cls}${isPlayer ? ' player' : ''}">${char}</div>`;
+      html += `<div class="cell ${escapeHtml(cls)}${isPlayer ? ' player' : ''}">${escapeHtml(char)}</div>`;
     }
   }
   container.innerHTML = html;
