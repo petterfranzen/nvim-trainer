@@ -1,0 +1,65 @@
+name: CI
+
+# There was no workflow here before, so every PR merged unverified. This one
+# builds the app and runs both headless Playwright playtests on every PR and
+# on main. Actions use the v7 tags, as flight-tracker does.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs; never cancel a main run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  blackbox:
+    # The job name is the required status check in the "main: PRs only" ruleset.
+    name: blackbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      # The playtest scripts drive the running app over HTTP (BASE_URL,
+      # default http://localhost:5173/), so start the dev server the README
+      # documents and wait until it actually answers before the playtests run.
+      - name: Start dev server
+        run: |
+          nohup npm run dev -- --port 5173 > "$RUNNER_TEMP/dev-server.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ > /dev/null; then
+              echo "dev server is up on :5173"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "dev server failed to start within 60s" >&2
+          cat "$RUNNER_TEMP/dev-server.log" >&2
+          exit 1
+
+      - name: Playtest
+        run: npm run playtest
+
+      - name: Playtest (edge cases)
+        run: npm run playtest:edge
