@@ -7,6 +7,47 @@ import { getProgress, markCompleted } from './storage.ts';
 import { fuzzyMatch } from './fuzzy.ts';
 import type { AbilityId, CommandId } from './types.ts';
 
+type StepResult = ReturnType<Engine['step']>;
+
+/** The engine call each command key is wired to (`ff` opens the finder instead). */
+const ENGINE_ACTIONS: Partial<Record<CommandId, (engine: Engine) => StepResult>> = {
+  h: (e) => e.step(-1, 0),
+  j: (e) => e.step(0, 1),
+  k: (e) => e.step(0, -1),
+  l: (e) => e.step(1, 0),
+  w: (e) => e.wordForward(),
+  b: (e) => e.wordBack(),
+  e: (e) => e.wordEnd(),
+  '0': (e) => e.lineStart(),
+  $: (e) => e.lineEnd(),
+  gg: (e) => e.top(),
+  G: (e) => e.bottom(),
+  dd: (e) => e.destroy(),
+  yy: (e) => e.yank(),
+  p: (e) => e.put(),
+};
+
+/** Commands a count prefix repeats; every other command runs once. */
+const REPEATABLE = new Set<CommandId>(['h', 'j', 'k', 'l', 'w', 'b', 'e']);
+const MAX_REPEATS = 50;
+/** Results that end a counted repeat early. */
+const STOPS_REPEAT = new Set<StepResult['kind']>(['zapped', 'won', 'blocked']);
+
+/** Message shown after a command, by result kind; anything else clears it. */
+const RESULT_MESSAGES: Partial<Record<StepResult['kind'], string>> = {
+  zapped: 'Zapped! Back to the start - try a jump motion instead.',
+  cleared: 'Rubble cleared!',
+  'picked-up': 'Picked up the key.',
+  placed: 'Door opened!',
+  'secret-found': 'Secret found!',
+};
+
+const OVERLAY_ADVANCE_KEYS = new Set(['Enter', ' ']);
+
+function hasModifier(e: KeyboardEvent): boolean {
+  return e.ctrlKey || e.metaKey || e.altKey;
+}
+
 export class GameController {
   private engine!: Engine;
   private input = new InputBuffer();
@@ -91,10 +132,7 @@ export class GameController {
 
   private onKeyDown(e: KeyboardEvent) {
     if (!this.overlay.classList.contains('hidden')) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.advanceAfterOverlay();
-      }
+      this.handleOverlayKey(e);
       return;
     }
     if (this.searchMode) {
@@ -102,7 +140,17 @@ export class GameController {
       this.handleSearchKey(e.key);
       return;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (hasModifier(e)) return;
+    this.handleGameKey(e);
+  }
+
+  private handleOverlayKey(e: KeyboardEvent) {
+    if (!OVERLAY_ADVANCE_KEYS.has(e.key)) return;
+    e.preventDefault();
+    this.advanceAfterOverlay();
+  }
+
+  private handleGameKey(e: KeyboardEvent) {
     // Space has no other role in this game (never a motion, never text) -
     // suppress the browser's default page-scroll for it unconditionally,
     // rather than only once a full <space>ff sequence completes. The
@@ -114,7 +162,7 @@ export class GameController {
     this.renderHud(); // reflect any pending chord/count buffer
     if (!parsed) return;
 
-    if (!this.unlocked.has(parsed.id) && parsed.id !== 'count') {
+    if (!this.isUsable(parsed.id)) {
       this.setMessage(`"${parsed.id}" isn't unlocked yet.`);
       return;
     }
@@ -122,68 +170,36 @@ export class GameController {
     this.dispatch(parsed.id, parsed.count);
   }
 
+  /** The count prefix is always accepted; everything else must be unlocked. */
+  private isUsable(id: CommandId): boolean {
+    return id === 'count' || this.unlocked.has(id);
+  }
+
   private dispatch(id: CommandId, count: number) {
     if (id === 'ff') {
       this.enterSearchMode();
       return;
     }
-    const reps = Math.max(1, Math.min(count, 50));
-    let last: ReturnType<Engine['step']> = { kind: 'noop' };
-
-    const runOnce = (): ReturnType<Engine['step']> => {
-      switch (id) {
-        case 'h': return this.engine.step(-1, 0);
-        case 'j': return this.engine.step(0, 1);
-        case 'k': return this.engine.step(0, -1);
-        case 'l': return this.engine.step(1, 0);
-        case 'w': return this.engine.wordForward();
-        case 'b': return this.engine.wordBack();
-        case 'e': return this.engine.wordEnd();
-        case '0': return this.engine.lineStart();
-        case '$': return this.engine.lineEnd();
-        case 'gg': return this.engine.top();
-        case 'G': return this.engine.bottom();
-        case 'dd': return this.engine.destroy();
-        case 'yy': return this.engine.yank();
-        case 'p': return this.engine.put();
-        default: return { kind: 'noop' };
-      }
-    };
-
-    const repeatable = id === 'h' || id === 'j' || id === 'k' || id === 'l' || id === 'w' || id === 'b' || id === 'e';
-    const times = repeatable ? reps : 1;
-    for (let i = 0; i < times; i++) {
-      last = runOnce();
-      if (last.kind === 'zapped' || last.kind === 'won' || last.kind === 'blocked') break;
-    }
-
+    const last = this.runCommand(id, count);
     this.renderAll();
-
-    switch (last.kind) {
-      case 'zapped':
-        this.setMessage('Zapped! Back to the start - try a jump motion instead.');
-        break;
-      case 'won':
-        this.onLevelComplete();
-        break;
-      case 'cleared':
-        this.setMessage('Rubble cleared!');
-        break;
-      case 'picked-up':
-        this.setMessage('Picked up the key.');
-        break;
-      case 'placed':
-        this.setMessage('Door opened!');
-        break;
-      case 'secret-found':
-        this.setMessage('Secret found!');
-        break;
-      case 'blocked':
-        this.setMessage('');
-        break;
-      default:
-        this.setMessage('');
+    if (last.kind === 'won') {
+      this.onLevelComplete();
+      return;
     }
+    this.setMessage(RESULT_MESSAGES[last.kind] ?? '');
+  }
+
+  /** Runs a command (repeated for a count where that applies) and returns the last result. */
+  private runCommand(id: CommandId, count: number): StepResult {
+    let last: StepResult = { kind: 'noop' };
+    const run = ENGINE_ACTIONS[id];
+    if (!run) return last;
+    const times = REPEATABLE.has(id) ? Math.max(1, Math.min(count, MAX_REPEATS)) : 1;
+    for (let i = 0; i < times; i++) {
+      last = run(this.engine);
+      if (STOPS_REPEAT.has(last.kind)) break;
+    }
+    return last;
   }
 
   private enterSearchMode() {
@@ -196,16 +212,7 @@ export class GameController {
   }
 
   private exitSearchMode(warp: boolean) {
-    if (warp && this.searchMode) {
-      const matches = fuzzyMatch(this.fuzzyQuery, LEVELS[this.levelIndex].files ?? []);
-      const target = matches[this.fuzzySelected];
-      if (target) {
-        const result = this.engine.warp(target.pos);
-        this.renderAll();
-        if (result.kind === 'won') this.onLevelComplete();
-        else if (result.kind === 'secret-found') this.setMessage('Secret found!');
-      }
-    }
+    if (warp && this.searchMode) this.warpToSelection();
     this.searchMode = false;
     this.fuzzyQuery = '';
     this.fuzzySelected = 0;
@@ -213,42 +220,47 @@ export class GameController {
     this.finder.innerHTML = '';
   }
 
+  private warpToSelection() {
+    const matches = fuzzyMatch(this.fuzzyQuery, LEVELS[this.levelIndex].files ?? []);
+    const target = matches[this.fuzzySelected];
+    if (!target) return;
+    const result = this.engine.warp(target.pos);
+    this.renderAll();
+    if (result.kind === 'won') this.onLevelComplete();
+    else if (result.kind === 'secret-found') this.setMessage('Secret found!');
+  }
+
+  private searchKeys = new Map<string, () => void>([
+    ['Escape', () => this.exitSearchMode(false)],
+    ['Enter', () => this.exitSearchMode(true)],
+    ['Backspace', () => this.setQuery(this.fuzzyQuery.slice(0, -1))],
+    ['ArrowDown', () => this.moveSelection(1)],
+    ['ArrowUp', () => this.moveSelection(-1)],
+  ]);
+
   private handleSearchKey(key: string) {
-    const files = LEVELS[this.levelIndex].files ?? [];
-    if (key === 'Escape') {
-      this.exitSearchMode(false);
-      return;
-    }
-    if (key === 'Enter') {
-      this.exitSearchMode(true);
-      return;
-    }
-    if (key === 'Backspace') {
-      this.fuzzyQuery = this.fuzzyQuery.slice(0, -1);
-      this.fuzzySelected = 0;
-      this.renderFinder();
-      return;
-    }
-    if (key === 'ArrowDown') {
-      const count = fuzzyMatch(this.fuzzyQuery, files).length;
-      if (count > 0) this.fuzzySelected = (this.fuzzySelected + 1) % count;
-      this.renderFinder();
-      return;
-    }
-    if (key === 'ArrowUp') {
-      const count = fuzzyMatch(this.fuzzyQuery, files).length;
-      if (count > 0) this.fuzzySelected = (this.fuzzySelected - 1 + count) % count;
-      this.renderFinder();
+    const handler = this.searchKeys.get(key);
+    if (handler) {
+      handler();
       return;
     }
     // A single printable character (letters/digits/punctuation/space) -
     // e.key is the full name ("Shift", "Tab", ...) for anything else, so
     // length === 1 is a reliable enough filter without an allowlist.
-    if (key.length === 1) {
-      this.fuzzyQuery += key;
-      this.fuzzySelected = 0;
-      this.renderFinder();
-    }
+    if (key.length === 1) this.setQuery(this.fuzzyQuery + key);
+  }
+
+  private setQuery(query: string) {
+    this.fuzzyQuery = query;
+    this.fuzzySelected = 0;
+    this.renderFinder();
+  }
+
+  /** Moves the finder selection by `delta`, wrapping around the match list. */
+  private moveSelection(delta: number) {
+    const count = fuzzyMatch(this.fuzzyQuery, LEVELS[this.levelIndex].files ?? []).length;
+    if (count > 0) this.fuzzySelected = (this.fuzzySelected + delta + count) % count;
+    this.renderFinder();
   }
 
   private renderFinder() {

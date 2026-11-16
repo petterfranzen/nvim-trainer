@@ -26,21 +26,29 @@ export function fuzzyMatch(query: string, candidates: FileEntry[]): FuzzyMatch[]
 
   const results: FuzzyMatch[] = [];
   for (const candidate of candidates) {
-    const name = candidate.name.toLowerCase();
-    let qi = 0;
-    let firstIndex = -1;
-    let lastIndex = -1;
-    for (let ni = 0; ni < name.length && qi < q.length; ni++) {
-      if (name[ni] === q[qi]) {
-        if (firstIndex === -1) firstIndex = ni;
-        lastIndex = ni;
-        qi++;
-      }
-    }
-    if (qi < q.length) continue; // not every query char found in order
-    const span = lastIndex - firstIndex + 1;
-    results.push({ ...candidate, score: span + firstIndex * 0.1 });
+    const score = subsequenceScore(candidate.name.toLowerCase(), q);
+    if (score !== null) results.push({ ...candidate, score });
   }
   results.sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
   return results;
+}
+
+/**
+ * Score of `q` as an in-order subsequence of `name` (both lowercased):
+ * the matched span plus a small penalty for starting late, or null when
+ * not every query character is found in order.
+ */
+function subsequenceScore(name: string, q: string): number | null {
+  let qi = 0;
+  let firstIndex = -1;
+  let lastIndex = -1;
+  for (let ni = 0; ni < name.length && qi < q.length; ni++) {
+    if (name[ni] !== q[qi]) continue;
+    if (firstIndex === -1) firstIndex = ni;
+    lastIndex = ni;
+    qi++;
+  }
+  if (qi < q.length) return null;
+  const span = lastIndex - firstIndex + 1;
+  return span + firstIndex * 0.1;
 }
